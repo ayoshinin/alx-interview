@@ -1,27 +1,38 @@
 
 #!/usr/bin/node
 const request = require('request');
-const API_URL = 'https://swapi-api.hbtn.io/api';
+const { promisify } = require('util');
+const id = process.argv[2];
+const apiUrl = `https://swapi-api.alx-tools.com/api/films/${id}`;
 
-if (process.argv.length > 2) {
-  request(`${API_URL}/films/${process.argv[2]}/`, (err, _, body) => {
-    if (err) {
-      console.log(err);
+// Promisify the request function
+const requestPromise = promisify(request);
+
+// Function to fetch and parse JSON data from a URL
+const fetchJson = async (url) => {
+    const response = await requestPromise(url);
+    if (response.statusCode !== 200) {
+        throw new Error(`Failed to fetch ${url}: ${response.statusMessage}`);
     }
-    const charactersURL = JSON.parse(body).characters;
-    const charactersName = charactersURL.map(
-      url => new Promise((resolve, reject) => {
-        request(url, (promiseErr, __, charactersReqBody) => {
-          if (promiseErr) {
-            reject(promiseErr);
-          }
-          resolve(JSON.parse(charactersReqBody).name);
-        });
-      }));
+    return JSON.parse(response.body);
+};
 
-    Promise.all(charactersName)
-      .then(names => console.log(names.join('\n')))
-      .catch(allErr => console.log(allErr));
-  });
-}
+const fetchCharacters = async () => {
+    try {
+        // Fetch the film data
+        const filmData = await fetchJson(apiUrl);
+        const characterUrls = filmData.characters;
+
+        // Fetch all character names in parallel
+        const characterPromises = characterUrls.map(url => fetchJson(url).then(data => data.name));
+        const characterNames = await Promise.all(characterPromises);
+
+        // Log each character's name
+        characterNames.forEach(name => console.log(name));
+    } catch (error) {
+        console.error('Error:', error.message);
+    }
+};
+
+fetchCharacters();
 
